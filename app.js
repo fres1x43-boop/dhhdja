@@ -1,45 +1,27 @@
 const tg = window.Telegram.WebApp;
-tg.expand();
-
-document.getElementById('topupBtn').addEventListener('click', async () => {
-    try {
-        // 1. Инициализируем платеж
-        const response = await fetch('http://localhost:5000/init-payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: tg.initDataUnsafe.user.id })
-        });
-        
-        const data = await response.json();
-        
-        if (data.status !== 'success') {
-            throw new Error('Payment init failed');
-        }
-
-        // 2. Открываем инвойс
-        tg.openInvoice(data.invoice_payload, async (status) => {
-            if (status === 'paid') {
-                // 3. Подтверждаем платеж
-                const confirm = await fetch('http://localhost:5000/confirm-payment', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: tg.initDataUnsafe.user.id })
-                });
-                
-                const result = await confirm.json();
-                
-                if (result.status === 'success') {
-                    document.getElementById('balance').textContent = 
-                        `${result.new_balance} stars`;
-                    tg.showAlert(`✅ Получено 20 звезд! Новый баланс: ${result.new_balance}`);
-                }
-            }
-        });
-    } catch (error) {
-        console.error('Payment error:', error);
-        tg.showAlert('Ошибка при оплате: ' + error.message);
-    }
-});
 
 // Инициализация
-tg.ready();
+tg.expand();
+document.getElementById('username').textContent = tg.initDataUnsafe.user.first_name;
+document.getElementById('userid').textContent = `ID: ${tg.initDataUnsafe.user.id}`;
+if (tg.initDataUnsafe.user.photo_url) {
+    document.getElementById('avatar').src = tg.initDataUnsafe.user.photo_url;
+}
+
+// Обработчик кнопки
+document.getElementById('topupBtn').addEventListener('click', () => {
+    tg.openInvoice({
+        title: "Пополнение звезд",
+        description: "20 звезд для вашего аккаунта",
+        currency: "XTR",
+        prices: [{ label: "20 Stars", amount: 20 }],
+        payload: `stars_${tg.initDataUnsafe.user.id}_${Date.now()}`,
+    }, (status) => {
+        if (status === 'paid') {
+            tg.showAlert("✅ Успешно! 20 звезд добавлены");
+            // Здесь можно отправить запрос на ваш сервер для подтверждения
+        } else if (status === 'failed') {
+            tg.showAlert("⚠️ Платеж не прошел");
+        }
+    });
+});

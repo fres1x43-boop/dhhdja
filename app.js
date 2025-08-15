@@ -1,14 +1,10 @@
 const tg = window.Telegram.WebApp;
 tg.expand();
 
-// Элементы интерфейса
-const payButton = document.getElementById('topupBtn');
-const balanceDisplay = document.getElementById('balance');
-
-// Обработчик платежа
-payButton.addEventListener('click', async () => {
+document.getElementById('topupBtn').addEventListener('click', async () => {
     try {
-        const response = await fetch('http://localhost:5000/create-payment', {
+        // 1. Инициализируем платеж
+        const response = await fetch('http://localhost:5000/init-payment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: tg.initDataUnsafe.user.id })
@@ -16,37 +12,34 @@ payButton.addEventListener('click', async () => {
         
         const data = await response.json();
         
-        if (data.status === 'success') {
-            tg.openInvoice(data.payload, async (status) => {
-                if (status === 'paid') {
-                    const update = await fetch('http://localhost:5000/confirm-payment', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                            user_id: tg.initDataUnsafe.user.id 
-                        })
-                    });
-                    
-                    const result = await update.json();
-                    if (result.status === 'success') {
-                        balanceDisplay.textContent = `${result.new_balance} звёзд`;
-                        tg.showAlert(`✅ Успешно! Новый баланс: ${result.new_balance} звёзд`);
-                    }
-                }
-            });
+        if (data.status !== 'success') {
+            throw new Error('Payment init failed');
         }
+
+        // 2. Открываем инвойс
+        tg.openInvoice(data.invoice_payload, async (status) => {
+            if (status === 'paid') {
+                // 3. Подтверждаем платеж
+                const confirm = await fetch('http://localhost:5000/confirm-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: tg.initDataUnsafe.user.id })
+                });
+                
+                const result = await confirm.json();
+                
+                if (result.status === 'success') {
+                    document.getElementById('balance').textContent = 
+                        `${result.new_balance} stars`;
+                    tg.showAlert(`✅ Получено 20 звезд! Новый баланс: ${result.new_balance}`);
+                }
+            }
+        });
     } catch (error) {
         console.error('Payment error:', error);
-        tg.showAlert('⚠️ Ошибка платежа');
+        tg.showAlert('Ошибка при оплате: ' + error.message);
     }
 });
 
 // Инициализация
-document.addEventListener('DOMContentLoaded', () => {
-    const user = tg.initDataUnsafe.user;
-    document.getElementById('username').textContent = user.first_name;
-    document.getElementById('userid').textContent = `ID: ${user.id}`;
-    if (user.photo_url) {
-        document.getElementById('avatar').src = user.photo_url;
-    }
-});
+tg.ready();

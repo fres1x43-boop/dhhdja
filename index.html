@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Star Balance</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background: var(--tg-theme-bg-color);
+            color: var(--tg-theme-text-color);
+        }
+        #profile {
+            margin: 20px 0;
+        }
+        #avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin: 0 auto;
+            display: block;
+        }
+        #balance {
+            font-size: 24px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        button {
+            background: var(--tg-theme-button-color);
+            color: var(--tg-theme-button-text-color);
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="profile">
+        <img id="avatar" src="" alt="Avatar">
+        <h2 id="username">Loading...</h2>
+        <p id="userid">ID: </p>
+        <div id="balance">0 stars</div>
+    </div>
+    <button id="topupBtn">Top Up 20 Stars</button>
+
+    <script>
+        // Initialize Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.enableClosingConfirmation();
+
+        // Get user data
+        const user = tg.initDataUnsafe.user;
+        
+        // Display user info
+        document.getElementById('avatar').src = user?.photo_url || '';
+        document.getElementById('username').textContent = 
+            user?.first_name + (user?.last_name ? ' ' + user.last_name : '');
+        document.getElementById('userid').textContent = `ID: ${user?.id || 'N/A'}`;
+
+        // Payment handler
+        document.getElementById('topupBtn').addEventListener('click', () => {
+            tg.openInvoice({
+                title: "Star Top-Up",
+                description: "Add 20 stars to your balance",
+                currency: "USD",
+                prices: [{ label: "20 Stars", amount: "2000" }],
+                payload: `user_${user.id}_stars_20_${Date.now()}`
+            }, (status) => {
+                if (status === 'paid') {
+                    tg.showAlert("✅ 20 stars added to your balance!");
+                    // In production, you would verify payment with backend
+                    const balanceEl = document.getElementById('balance');
+                    const current = parseInt(balanceEl.textContent) || 0;
+                    balanceEl.textContent = (current + 20) + ' stars';
+                    
+                    // Send data to bot (for Python backend)
+                    tg.sendData(JSON.stringify({
+                        action: 'update_balance',
+                        user_id: user.id,
+                        amount: 20
+                    }));
+                }
+            });
+        });
+
+        // Handle data from bot
+        tg.onEvent('mainButtonClicked', () => {
+            tg.sendData(JSON.stringify({ action: 'get_balance' }));
+        });
+    </script>
+</body>
+</html>
